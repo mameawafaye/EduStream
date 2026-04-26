@@ -56,7 +56,6 @@ export default function Login() {
         <div style={styles.brand}>Edu<br/>Stream</div>
         <div style={styles.divider}></div>
         <div style={styles.tagline}>Plateforme académique de gestion des cours</div>
-        <div style={styles.badge}>Groupe 6 — 2025–2026</div>
       </div>
 
       {/* Formulaire */}
@@ -84,11 +83,11 @@ export default function Login() {
 
         <div style={styles.separator}>
           <div style={styles.sepLine}></div>
-          <span style={styles.sepText}>EduStream · UML 2025–2026</span>
+          
           <div style={styles.sepLine}></div>
         </div>
 
-        <p style={styles.footer}>Accès réservé aux membres inscrits — Groupe 6</p>
+        <p style={styles.footer}>Accès réservé aux membres inscrits </p>
       </div>
     </div>
   );
