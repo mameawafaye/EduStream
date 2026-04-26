@@ -3,30 +3,12 @@ import { useNavigate } from 'react-router-dom';
 import api from '../api/axios';
 import { useAuth } from '../context/AuthContext';
 
-const styles = {
-  wrap: { display: 'flex', minHeight: '100vh', fontFamily: "'Source Sans 3', sans-serif" } as React.CSSProperties,
-  side: { width: 220, background: '#085041', display: 'flex', flexDirection: 'column' as const, alignItems: 'center', justifyContent: 'center', padding: '2rem 1.5rem', gap: '1.25rem' },
-  logo: { width: 52, height: 52, borderRadius: '50%', background: '#1D9E75', display: 'flex', alignItems: 'center', justifyContent: 'center' },
-  brand: { color: '#9FE1CB', fontFamily: 'Georgia, serif', fontSize: 22, textAlign: 'center' as const, lineHeight: 1.3 },
-  tagline: { color: '#5DCAA5', fontSize: 12, textAlign: 'center' as const, lineHeight: 1.6 },
-  divider: { width: 32, height: 1, background: '#0F6E56' },
-  badge: { background: '#0F6E56', color: '#9FE1CB', fontSize: 11, padding: '4px 10px', borderRadius: 20 },
-  main: { flex: 1, background: '#fff', padding: '0 2.5rem', display: 'flex', flexDirection: 'column' as const, justifyContent: 'center', maxWidth: 420 },
-  heading: { fontFamily: 'Georgia, serif', fontSize: 26, color: '#1a1a1a', margin: '0 0 6px' },
-  sub: { fontSize: 13, color: '#666', margin: '0 0 2rem' },
-  label: { display: 'block', fontSize: 11, fontWeight: 500, color: '#555', marginBottom: 5, letterSpacing: '0.06em', textTransform: 'uppercase' as const },
-  input: { width: '100%', padding: '10px 12px', border: '1px solid #ddd', borderRadius: 8, fontSize: 14, boxSizing: 'border-box' as const, outline: 'none', fontFamily: 'inherit' },
-  btn: { width: '100%', padding: 12, background: '#085041', color: '#E1F5EE', border: 'none', borderRadius: 8, fontSize: 14, fontWeight: 500, cursor: 'pointer', marginTop: 8, letterSpacing: '0.03em' },
-  err: { fontSize: 12, color: '#E24B4A', margin: '0 0 8px' },
-  footer: { fontSize: 11, color: '#aaa', textAlign: 'center' as const, marginTop: '2rem' },
-  separator: { display: 'flex', alignItems: 'center', gap: 8, margin: '1.5rem 0' },
-  sepLine: { flex: 1, height: 1, background: '#eee' },
-  sepText: { fontSize: 11, color: '#bbb' },
-};
+type Role = 'etudiant' | 'enseignant' | 'administrateur';
 
 export default function Login() {
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
+  const [role, setRole] = useState<Role>('etudiant');
   const [error, setError] = useState('');
   const { login } = useAuth();
   const navigate = useNavigate();
@@ -35,7 +17,7 @@ export default function Login() {
     e.preventDefault();
     setError('');
     try {
-      const res = await api.post('/login', { email, password });
+      const res = await api.post('/login', { email, password, role });
       login(res.data.user, res.data.token);
       navigate('/dashboard');
     } catch {
@@ -43,51 +25,78 @@ export default function Login() {
     }
   };
 
+  const roles: { key: Role; label: string }[] = [
+    { key: 'etudiant', label: 'Étudiant' },
+    { key: 'enseignant', label: 'Enseignant' },
+    { key: 'administrateur', label: 'Administrateur' },
+  ];
+
   return (
-    <div style={styles.wrap}>
-      {/* Panneau gauche */}
-      <div style={styles.side}>
-        <div style={styles.logo}>
-          <svg width="26" height="26" viewBox="0 0 26 26" fill="none">
-            <circle cx="13" cy="9" r="5" stroke="#E1F5EE" strokeWidth="1.5"/>
-            <path d="M6 22c0-3.866 3.134-7 7-7s7 3.134 7 7" stroke="#E1F5EE" strokeWidth="1.5" strokeLinecap="round"/>
+    <div style={{ display: 'flex', minHeight: '100vh', fontFamily: 'sans-serif' }}>
+
+      {/* Panneau gauche vert */}
+      <div style={{ width: 260, flexShrink: 0, background: '#2d5a27', display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', padding: '2.5rem 1.5rem', gap: '1.5rem' }}>
+        <div style={{ background: '#3d7a35', borderRadius: 20, width: 72, height: 72, display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+          <svg width="38" height="38" viewBox="0 0 38 38" fill="none">
+            <rect x="4" y="8" width="30" height="22" rx="4" stroke="#fff" strokeWidth="2"/>
+            <polygon points="15,13 15,27 27,20" fill="#fff"/>
           </svg>
         </div>
-        <div style={styles.brand}>Edu<br/>Stream</div>
-        <div style={styles.divider}></div>
-        <div style={styles.tagline}>Plateforme académique de gestion des cours</div>
+        <div style={{ color: '#fff', fontSize: 26, fontWeight: 600, textAlign: 'center', fontFamily: 'Georgia, serif' }}>EduStream</div>
+        <div style={{ color: '#a8c8a0', fontSize: 13, textAlign: 'center', lineHeight: 1.6 }}>Plateforme de gestion et diffusion de cours vidéo</div>
+        <div style={{ width: 40, height: 1, background: '#3d7a35' }}></div>
+        
       </div>
 
-      {/* Formulaire */}
-      <div style={styles.main}>
-        <h2 style={styles.heading}>Connexion</h2>
-        <p style={styles.sub}>Accédez à votre espace académique</p>
+      {/* Formulaire droite */}
+      <div style={{ flex: 1, background: '#f7f5f0', display: 'flex', flexDirection: 'column', justifyContent: 'center', padding: '2.5rem 3rem' }}>
+        <h2 style={{ fontFamily: 'Georgia, serif', fontSize: 26, color: '#1a1a1a', margin: '0 0 4px' }}>Connexion</h2>
+        <p style={{ fontSize: 14, color: '#666', margin: '0 0 1.75rem' }}>Accédez à votre espace personnel.</p>
 
         <form onSubmit={handleSubmit}>
-          <div style={{ marginBottom: 16 }}>
-            <label style={styles.label}>Adresse e-mail</label>
-            <input style={styles.input} type="email" value={email}
-              onChange={e => setEmail(e.target.value)} required
-              placeholder="etudiant@edustream.com"/>
-          </div>
-          <div style={{ marginBottom: 16 }}>
-            <label style={styles.label}>Mot de passe</label>
-            <input style={styles.input} type="password" value={password}
-              onChange={e => setPassword(e.target.value)} required/>
+
+          {/* Sélection rôle */}
+          <div style={{ fontSize: 11, fontWeight: 600, color: '#555', letterSpacing: '0.08em', textTransform: 'uppercase', marginBottom: 8 }}>Je suis</div>
+          <div style={{ display: 'flex', gap: 10, marginBottom: '1.5rem' }}>
+            {roles.map(r => (
+              <button key={r.key} type="button" onClick={() => setRole(r.key)}
+                style={{ flex: 1, padding: '10px 6px', borderRadius: 10, border: role === r.key ? '1.5px solid #2d5a27' : '1.5px solid #d0ccc4', background: '#f7f5f0', color: role === r.key ? '#2d5a27' : '#444', fontSize: 14, cursor: 'pointer', fontWeight: role === r.key ? 500 : 400 }}>
+                {r.label}
+              </button>
+            ))}
           </div>
 
-          {error && <p style={styles.err}>{error}</p>}
+          {/* Email */}
+          <div style={{ fontSize: 11, fontWeight: 600, color: '#555', letterSpacing: '0.08em', textTransform: 'uppercase', marginBottom: 8 }}>Adresse email</div>
+          <input type="email" value={email} onChange={e => setEmail(e.target.value)} required
+            placeholder="prenom.nom@universite.sn"
+            style={{ width: '100%', padding: '14px 16px', borderRadius: 10, border: 'none', background: '#2a2a2a', color: '#fff', fontSize: 14, boxSizing: 'border-box', outline: 'none', marginBottom: '1rem' }}/>
 
-          <button type="submit" style={styles.btn}>Se connecter</button>
+          {/* Mot de passe */}
+          <div style={{ fontSize: 11, fontWeight: 600, color: '#555', letterSpacing: '0.08em', textTransform: 'uppercase', marginBottom: 8 }}>Mot de passe</div>
+          <input type="password" value={password} onChange={e => setPassword(e.target.value)} required
+            placeholder="••••••••"
+            style={{ width: '100%', padding: '14px 16px', borderRadius: 10, border: 'none', background: '#2a2a2a', color: '#fff', fontSize: 14, boxSizing: 'border-box', outline: 'none', marginBottom: '0.75rem' }}/>
+
+          <div style={{ textAlign: 'right', fontSize: 13, color: '#2d5a27', marginBottom: '1rem', cursor: 'pointer' }}>Mot de passe oublié ?</div>
+
+          {error && <p style={{ color: '#E24B4A', fontSize: 13, margin: '0 0 0.75rem' }}>{error}</p>}
+
+          <button type="submit"
+            style={{ width: '100%', padding: 14, background: '#2d5a27', color: '#fff', border: 'none', borderRadius: 10, fontSize: 15, cursor: 'pointer' }}>
+            Se connecter
+          </button>
         </form>
 
-        <div style={styles.separator}>
-          <div style={styles.sepLine}></div>
-          
-          <div style={styles.sepLine}></div>
+        {/* Bas de page */}
+        <div style={{ display: 'flex', alignItems: 'center', gap: 10, margin: '1.5rem 0 1rem' }}>
+          <div style={{ flex: 1, height: 1, background: '#ddd' }}></div>
+          <span style={{ fontSize: 12, color: '#aaa', whiteSpace: 'nowrap' }}>Pas encore de compte ?</span>
+          <div style={{ flex: 1, height: 1, background: '#ddd' }}></div>
         </div>
-
-        <p style={styles.footer}>Accès réservé aux membres inscrits </p>
+        <p style={{ fontSize: 13, color: '#777', textAlign: 'center', margin: 0 }}>
+          Contactez votre <span style={{ color: '#2d5a27', fontWeight: 500 }}>administrateur</span> pour créer un accès.
+        </p>
       </div>
     </div>
   );
