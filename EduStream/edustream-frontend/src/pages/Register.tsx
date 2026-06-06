@@ -5,13 +5,13 @@ import { useAuth } from '../context/AuthContext';
 import styles from './Login.module.css';
 
 export default function Register() {
-  const [form, setForm] = useState({ name: '', email: '', password: '', password_confirmation: '', role: 'etudiant' });
+  const [form, setForm] = useState({ name: '', email: '', password: '', password_confirmation: '' });
   const [error, setError] = useState('');
   const [loading, setLoading] = useState(false);
   const { login } = useAuth();
   const navigate = useNavigate();
 
-  const handleChange = (e: React.ChangeEvent<HTMLInputElement | HTMLSelectElement>) => {
+  const handleChange = (e: React.ChangeEvent<HTMLInputElement>) => {
     setForm({ ...form, [e.target.name]: e.target.value });
   };
 
@@ -72,13 +72,6 @@ export default function Register() {
             <div className={styles.field}>
               <label className={styles.label}>Adresse email</label>
               <input className={styles.input} name="email" type="email" placeholder="vous@exemple.sn" value={form.email} onChange={handleChange} required />
-            </div>
-            <div className={styles.field}>
-              <label className={styles.label}>Je suis</label>
-              <select className={styles.input} name="role" value={form.role} onChange={handleChange}>
-                <option value="etudiant">Étudiant</option>
-                <option value="enseignant">Enseignant</option>
-              </select>
             </div>
             <div className={styles.field}>
               <label className={styles.label}>Mot de passe</label>

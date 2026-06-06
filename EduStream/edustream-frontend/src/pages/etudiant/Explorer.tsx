@@ -1,31 +1,19 @@
 import { useEffect, useState } from 'react';
 import api from '../../api/axios';
+import ExplorerCourseCard, { type ExplorerModule } from '../../components/ExplorerCourseCard';
+import { useStudentCourses } from '../../hooks/useStudentCourses';
+import type { StudentModule } from '../../types/studentModule';
+import CoursePlayer from './CoursePlayer';
 import styles from './DashboardEtudiant.module.css';
 
-interface Module {
-  id: number;
-  titre: string;
-  description: string;
-  matiere?: string;
-  nb_chapitres?: number;
-  nb_videos?: number;
-  enseignant?: { name: string };
-}
-
-const COVERS: Record<number, string> = {
-  0: 'https://images.unsplash.com/photo-1516116216624-53e697fedbea?w=400&q=80',
-  1: 'https://images.unsplash.com/photo-1544383835-bda2bc66a55d?w=400&q=80',
-  2: 'https://images.unsplash.com/photo-1558494949-ef010cbdcc31?w=400&q=80',
-  3: 'https://images.unsplash.com/photo-1627398242454-45a1465c2479?w=400&q=80',
-  4: 'https://images.unsplash.com/photo-1581091226825-a6a2a5aee158?w=400&q=80',
-};
-
 export default function Explorer() {
-  const [modules, setModules] = useState<Module[]>([]);
+  const [modules, setModules] = useState<ExplorerModule[]>([]);
   const [search, setSearch] = useState('');
   const [loading, setLoading] = useState(true);
-  const [inscriptions, setInscriptions] = useState<number[]>([]);
+  const [inscriptions, setInscriptions] = useState<StudentModule[]>([]);
   const [enrolling, setEnrolling] = useState<number | null>(null);
+
+  const { playingModule, openCourse, closeCourse, refreshProgress } = useStudentCourses(false);
 
   useEffect(() => {
     Promise.all([
@@ -33,27 +21,55 @@ export default function Explorer() {
       api.get('/mes-inscriptions'),
     ]).then(([modRes, insRes]) => {
       setModules(modRes.data.data || modRes.data);
-      const ids = (insRes.data.data || insRes.data).map((m: Module) => m.id);
-      setInscriptions(ids);
+      setInscriptions(insRes.data.data || insRes.data);
     }).catch(() => {}).finally(() => setLoading(false));
   }, []);
+
+  const inscriptionMap = new Map(inscriptions.map(m => [m.id, m]));
 
   const handleInscrire = async (id: number) => {
     setEnrolling(id);
     try {
       await api.post(`/modules/${id}/inscrire`);
-      setInscriptions(prev => [...prev, id]);
-    } catch (err: any) {
-      alert(err.response?.data?.message || 'Erreur lors de l\'inscription.');
+      const insRes = await api.get('/mes-inscriptions');
+      const updated: StudentModule[] = insRes.data.data || insRes.data;
+      setInscriptions(updated);
+      const enrolled = updated.find(m => m.id === id);
+      if (enrolled) await openCourse(enrolled);
+    } catch (err: unknown) {
+      const message = (err as { response?: { data?: { message?: string } } })?.response?.data?.message;
+      alert(message || "Erreur lors de l'inscription.");
     } finally {
       setEnrolling(null);
     }
+  };
+
+  const handleOpen = async (mod: ExplorerModule) => {
+    const enrolled = inscriptionMap.get(mod.id);
+    if (enrolled) await openCourse(enrolled);
+  };
+
+  const handleCloseCourse = () => {
+    closeCourse();
+    api.get('/mes-inscriptions')
+      .then(res => setInscriptions(res.data.data || res.data))
+      .catch(() => {});
   };
 
   const filtered = modules.filter(m =>
     m.titre.toLowerCase().includes(search.toLowerCase()) ||
     (m.matiere || '').toLowerCase().includes(search.toLowerCase())
   );
+
+  if (playingModule) {
+    return (
+      <CoursePlayer
+        module={playingModule}
+        onClose={handleCloseCourse}
+        onProgressUpdate={refreshProgress}
+      />
+    );
+  }
 
   return (
     <div className={styles.page}>
@@ -85,35 +101,17 @@ export default function Explorer() {
       ) : (
         <div className={styles.grid}>
           {filtered.map((mod, i) => {
-            const isInscrit = inscriptions.includes(mod.id);
+            const enrolled = inscriptionMap.get(mod.id);
             return (
-              <div key={mod.id} className={styles.card}>
-                <div className={styles.cardThumb}>
-                  <img src={COVERS[i % 5]} alt={mod.titre} className={styles.cardImg} />
-                  {mod.matiere && <span className={styles.cardBadge}>{mod.matiere}</span>}
-                </div>
-                <div className={styles.cardBody}>
-                  <h3 className={styles.cardTitle}>{mod.titre}</h3>
-                  <p style={{ fontSize: 13, color: '#64748b', margin: '4px 0 8px' }}>{mod.description}</p>
-                  <div style={{ fontSize: 12, color: '#94a3b8' }}>
-                    {mod.nb_chapitres || 0} chapitres · {mod.nb_videos || 0} vidéos
-                    {mod.enseignant && ` · ${mod.enseignant.name}`}
-                  </div>
-                </div>
-                <div className={styles.cardFooter}>
-                  {isInscrit ? (
-                    <span style={{ color: '#22c55e', fontWeight: 600, fontSize: 13 }}>✓ Inscrit</span>
-                  ) : (
-                    <button
-                      className={styles.cardBtn}
-                      onClick={() => handleInscrire(mod.id)}
-                      disabled={enrolling === mod.id}
-                    >
-                      {enrolling === mod.id ? 'Inscription...' : "S'inscrire"}
-                    </button>
-                  )}
-                </div>
-              </div>
+              <ExplorerCourseCard
+                key={mod.id}
+                module={{ ...mod, progression: enrolled?.progression }}
+                index={i}
+                isInscrit={!!enrolled}
+                enrolling={enrolling === mod.id}
+                onInscrire={handleInscrire}
+                onOpen={handleOpen}
+              />
             );
           })}
         </div>

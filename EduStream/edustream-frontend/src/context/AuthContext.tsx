@@ -1,4 +1,5 @@
 import { createContext, useContext, useState, ReactNode, useEffect } from 'react';
+import api from '../api/axios';
 
 export interface User {
   id: number;
@@ -23,13 +24,32 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   const [isLoading, setIsLoading] = useState(true);
 
   useEffect(() => {
-    const savedToken = localStorage.getItem('token');
-    const savedUser = localStorage.getItem('user');
-    if (savedToken && savedUser) {
+    const validateSession = async () => {
+      const savedToken = localStorage.getItem('token');
+      if (!savedToken) {
+        setIsLoading(false);
+        return;
+      }
+
       setToken(savedToken);
-      setUser(JSON.parse(savedUser));
-    }
-    setIsLoading(false);
+
+      try {
+        const res = await api.get<User>('/me');
+        setUser(res.data);
+        setToken(savedToken);
+        localStorage.setItem('user', JSON.stringify(res.data));
+      } catch {
+        // Token expiré ou invalide — nettoyage silencieux (pas de redirection ici)
+        setUser(null);
+        setToken(null);
+        localStorage.removeItem('token');
+        localStorage.removeItem('user');
+      } finally {
+        setIsLoading(false);
+      }
+    };
+
+    validateSession();
   }, []);
 
   const login = (u: User, t: string) => {

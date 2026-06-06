@@ -63,8 +63,22 @@ class ModuleController extends Controller
     }
 
     /** Afficher un module avec ses chapitres et vidéos */
-    public function show(Module $module): JsonResponse
+    public function show(Request $request, Module $module): JsonResponse
     {
+        $user = $request->user();
+
+        if ($user->isEtudiant()) {
+            if ($module->statut !== 'publie') {
+                return response()->json(['message' => 'Ce module n\'est pas disponible.'], 403);
+            }
+
+            if (! $user->modulesInscrits()->where('module_id', $module->id)->exists()) {
+                return response()->json(['message' => 'Vous devez être inscrit à ce module.'], 403);
+            }
+        } elseif ($user->isEnseignant() && $module->user_id !== $user->id) {
+            return response()->json(['message' => 'Accès refusé.'], 403);
+        }
+
         $module->load(['enseignant:id,name', 'chapitres.videos']);
         $module->nb_chapitres = $module->chapitres->count();
         $module->nb_videos    = $module->videos()->count();

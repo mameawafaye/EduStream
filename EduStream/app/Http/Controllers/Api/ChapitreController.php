@@ -11,8 +11,12 @@ use Illuminate\Http\Request;
 class ChapitreController extends Controller
 {
     /** Liste les chapitres d'un module */
-    public function index(Module $module): JsonResponse
+    public function index(Request $request, Module $module): JsonResponse
     {
+        if ($denied = $this->ensureCanViewModule($request, $module)) {
+            return $denied;
+        }
+
         $chapitres = $module->chapitres()->with('videos')->get();
 
         return response()->json($chapitres);
@@ -73,5 +77,24 @@ class ChapitreController extends Controller
         $chapitre->delete();
 
         return response()->json(['message' => 'Chapitre supprimé avec succès.']);
+    }
+
+    private function ensureCanViewModule(Request $request, Module $module): ?JsonResponse
+    {
+        $user = $request->user();
+
+        if ($user->isEtudiant()) {
+            if ($module->statut !== 'publie') {
+                return response()->json(['message' => 'Ce module n\'est pas disponible.'], 403);
+            }
+
+            if (! $user->modulesInscrits()->where('module_id', $module->id)->exists()) {
+                return response()->json(['message' => 'Vous devez être inscrit à ce module.'], 403);
+            }
+        } elseif ($user->isEnseignant() && $module->user_id !== $user->id) {
+            return response()->json(['message' => 'Accès refusé.'], 403);
+        }
+
+        return null;
     }
 }

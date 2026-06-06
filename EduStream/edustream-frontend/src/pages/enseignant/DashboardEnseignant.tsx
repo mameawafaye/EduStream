@@ -2,6 +2,7 @@ import { useEffect, useRef, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { useAuth } from '../../context/AuthContext';
 import api from '../../api/axios';
+import ConfirmDialog from '../../components/ConfirmDialog';
 import styles from './DashboardEnseignant.module.css';
 import recStyles from './Enregistrer.module.css';
 
@@ -32,6 +33,8 @@ export default function DashboardEnseignant() {
   const { user } = useAuth();
   const navigate = useNavigate();
   const [modules, setModules] = useState<Module[]>([]);
+  const [publishTarget, setPublishTarget] = useState<Module | null>(null);
+  const [publishing, setPublishing] = useState(false);
 
   // Enregistrement
   const [recording, setRecording] = useState(false);
@@ -140,6 +143,7 @@ export default function DashboardEnseignant() {
     setSaveProgress(0);
 
     const fd = new FormData();
+    fd.append('source_type', 'upload');
     fd.append('titre', saveForm.titre);
     fd.append('video', recordedBlob, `enregistrement-${Date.now()}.webm`);
     fd.append('duree', String(seconds));
@@ -166,15 +170,32 @@ export default function DashboardEnseignant() {
     }
   };
 
-  const handlePublier = async (id: number) => {
+  const handlePublier = async () => {
+    if (!publishTarget) return;
+    setPublishing(true);
     try {
-      await api.patch(`/modules/${id}/publier`);
-      setModules(prev => prev.map(m => m.id === id ? { ...m, statut: 'publie' } : m));
-    } catch {}
+      await api.patch(`/modules/${publishTarget.id}/publier`);
+      setModules(prev => prev.map(m => m.id === publishTarget.id ? { ...m, statut: 'publie' } : m));
+      setPublishTarget(null);
+    } catch {
+      alert('Erreur lors de la publication.');
+    } finally {
+      setPublishing(false);
+    }
   };
 
   return (
     <div className={styles.page}>
+      <ConfirmDialog
+        open={!!publishTarget}
+        title="Publier ce module ?"
+        message={publishTarget ? `Le module « ${publishTarget.titre} » sera visible par tous les étudiants.` : ''}
+        confirmLabel="Publier"
+        loading={publishing}
+        onConfirm={handlePublier}
+        onCancel={() => !publishing && setPublishTarget(null)}
+      />
+
       <div className={styles.header}>
         <div>
           <h1 className={styles.title}>Bonjour, {user?.name?.split(' ')[0]} 👋</h1>
@@ -319,7 +340,7 @@ export default function DashboardEnseignant() {
                 {mod.statut === 'publie' ? 'Publié' : 'Brouillon'}
               </span>
               {mod.statut === 'brouillon' && (
-                <button className={styles.publishBtn} onClick={() => handlePublier(mod.id)}>📤 Publier</button>
+                <button className={styles.publishBtn} onClick={() => setPublishTarget(mod)}>📤 Publier</button>
               )}
               <button className={styles.editBtn} onClick={() => navigate('/dashboard/mes-modules')}>✏️</button>
             </div>

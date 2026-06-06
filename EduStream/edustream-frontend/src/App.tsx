@@ -4,12 +4,15 @@ import { useAuth } from './context/AuthContext';
 // Auth
 import Login from './pages/Login';
 import Register from './pages/Register';
+import ForgotPassword from './pages/ForgotPassword';
+import ResetPassword from './pages/ResetPassword';
 
 // Layout
 import Layout from './components/Layout';
 
 // Commun
 import Profil from './pages/Profil';
+import Notifications from './pages/Notifications';
 
 // Admin
 import DashboardAdmin   from './pages/admin/DashboardAdmin';
@@ -31,14 +34,30 @@ import Progression       from './pages/etudiant/Progression';
 
 // ─── Guards ──────────────────────────────────────────────────────────────────
 
-function PrivateRoute({ children }: { children: React.ReactNode }) {
-  const { token, isLoading } = useAuth();
-  if (isLoading) return (
+type Role = 'admin' | 'enseignant' | 'etudiant';
+
+function LoadingScreen() {
+  return (
     <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', minHeight: '100vh', fontSize: 16, color: '#64748B' }}>
       Chargement...
     </div>
   );
+}
+
+function PrivateRoute({ children }: { children: React.ReactNode }) {
+  const { token, isLoading } = useAuth();
+  if (isLoading) return <LoadingScreen />;
   return token ? <>{children}</> : <Navigate to="/login" replace />;
+}
+
+/** Restreint l'accès aux rôles autorisés, redirige vers le dashboard sinon */
+function RoleRoute({ roles, children }: { roles: Role[]; children: React.ReactNode }) {
+  const { user, isLoading } = useAuth();
+  if (isLoading) return <LoadingScreen />;
+  if (!user || !roles.includes(user.role)) {
+    return <Navigate to="/dashboard" replace />;
+  }
+  return <>{children}</>;
 }
 
 /** Redirige vers le bon dashboard selon le rôle */
@@ -61,8 +80,10 @@ export default function App() {
       <Route path="/" element={<Navigate to={token ? '/dashboard' : '/login'} replace />} />
 
       {/* Auth publique */}
-      <Route path="/login"    element={token ? <Navigate to="/dashboard" replace /> : <Login />} />
-      <Route path="/register" element={token ? <Navigate to="/dashboard" replace /> : <Register />} />
+      <Route path="/login"           element={token ? <Navigate to="/dashboard" replace /> : <Login />} />
+      <Route path="/register"        element={token ? <Navigate to="/dashboard" replace /> : <Register />} />
+      <Route path="/forgot-password" element={token ? <Navigate to="/dashboard" replace /> : <ForgotPassword />} />
+      <Route path="/reset-password"  element={token ? <Navigate to="/dashboard" replace /> : <ResetPassword />} />
 
       {/* Zone protégée */}
       <Route
@@ -75,26 +96,26 @@ export default function App() {
                 <Route index element={<DashboardIndex />} />
 
                 {/* ── Étudiant ── */}
-                <Route path="mes-cours"   element={<MesCours />} />
-                <Route path="continuer"   element={<MesCours />} />
-                <Route path="progression" element={<Progression />} />
-                <Route path="explorer"    element={<Explorer />} />
+                <Route path="mes-cours"   element={<RoleRoute roles={['etudiant']}><MesCours /></RoleRoute>} />
+                <Route path="continuer"   element={<RoleRoute roles={['etudiant']}><MesCours /></RoleRoute>} />
+                <Route path="progression" element={<RoleRoute roles={['etudiant']}><Progression /></RoleRoute>} />
+                <Route path="explorer"    element={<RoleRoute roles={['etudiant']}><Explorer /></RoleRoute>} />
 
                 {/* ── Enseignant ── */}
-                <Route path="enregistrer"  element={<DashboardEnseignant />} />
-                <Route path="mes-modules"  element={<MesModules />} />
-                <Route path="etudiants"    element={<MesEtudiants />} />
-                <Route path="stats"        element={<StatsEnseignant />} />
+                <Route path="enregistrer"  element={<RoleRoute roles={['enseignant']}><DashboardEnseignant /></RoleRoute>} />
+                <Route path="mes-modules"  element={<RoleRoute roles={['enseignant']}><MesModules /></RoleRoute>} />
+                <Route path="etudiants"    element={<RoleRoute roles={['enseignant']}><MesEtudiants /></RoleRoute>} />
+                <Route path="stats"        element={<RoleRoute roles={['enseignant']}><StatsEnseignant /></RoleRoute>} />
 
                 {/* ── Admin ── */}
-                <Route path="utilisateurs" element={<DashboardAdmin />} />
-                <Route path="modules"      element={<AdminModules />} />
-                <Route path="videos"       element={<AdminVideos />} />
-                <Route path="statistiques" element={<AdminStats />} />
+                <Route path="utilisateurs" element={<RoleRoute roles={['admin']}><DashboardAdmin /></RoleRoute>} />
+                <Route path="modules"      element={<RoleRoute roles={['admin']}><AdminModules /></RoleRoute>} />
+                <Route path="videos"       element={<RoleRoute roles={['admin']}><AdminVideos /></RoleRoute>} />
+                <Route path="statistiques" element={<RoleRoute roles={['admin']}><AdminStats /></RoleRoute>} />
 
                 {/* ── Commun ── */}
                 <Route path="profil"        element={<Profil />} />
-                <Route path="notifications" element={<Profil />} />
+                <Route path="notifications" element={<RoleRoute roles={['etudiant']}><Notifications /></RoleRoute>} />
                 <Route path="parametres"    element={<Profil />} />
 
                 {/* Fallback */}

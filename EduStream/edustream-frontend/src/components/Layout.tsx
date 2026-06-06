@@ -1,7 +1,8 @@
-import { ReactNode } from 'react';
+import { ReactNode, useState } from 'react';
 import { Link, useLocation, useNavigate } from 'react-router-dom';
 import { useAuth } from '../context/AuthContext';
 import api from '../api/axios';
+import ConfirmDialog from './ConfirmDialog';
 import styles from './Layout.module.css';
 
 interface NavItem {
@@ -18,7 +19,7 @@ const navByRole: Record<string, NavItem[]> = {
     { icon: '▶', label: 'Continuer', path: '/dashboard/continuer' },
     { icon: '📈', label: 'Ma progression', path: '/dashboard/progression' },
     { icon: '🔍', label: 'Explorer', path: '/dashboard/explorer' },
-    { icon: '🔔', label: 'Notifications', path: '/dashboard/notifications', badge: 3 },
+    { icon: '🔔', label: 'Notifications', path: '/dashboard/notifications' },
   ],
   enseignant: [
     { icon: '⊞', label: 'Tableau de bord', path: '/dashboard' },
@@ -32,7 +33,7 @@ const navByRole: Record<string, NavItem[]> = {
     { icon: '👥', label: 'Utilisateurs', path: '/dashboard/utilisateurs' },
     { icon: '📚', label: 'Modules', path: '/dashboard/modules' },
     { icon: '🎥', label: 'Vidéos', path: '/dashboard/videos' },
-    { icon: '📊', label: 'Statistiques', path: '/dashboard/stats' },
+    { icon: '📊', label: 'Statistiques', path: '/dashboard/statistiques' },
     { icon: '⚙', label: 'Paramètres', path: '/dashboard/parametres' },
   ],
 };
@@ -43,8 +44,11 @@ export default function Layout({ children }: { children: ReactNode }) {
   const navigate = useNavigate();
 
   const navItems = navByRole[user?.role || 'etudiant'] || [];
+  const [showLogoutConfirm, setShowLogoutConfirm] = useState(false);
+  const [loggingOut, setLoggingOut] = useState(false);
 
   const handleLogout = async () => {
+    setLoggingOut(true);
     try { await api.post('/logout'); } catch {}
     logout();
     navigate('/login');
@@ -61,10 +65,11 @@ export default function Layout({ children }: { children: ReactNode }) {
           <span>EduStream</span>
         </div>
         <div className={styles.topRight}>
-          <button className={styles.notifBtn}>
-            🔔
-            <span className={styles.notifDot}></span>
-          </button>
+          {user?.role === 'etudiant' && (
+            <Link to="/dashboard/notifications" className={styles.notifBtn}>
+              🔔
+            </Link>
+          )}
           <div className={styles.userChip}>
             <div className={styles.avatar}>{initials}</div>
             <div className={styles.userInfo}>
@@ -97,7 +102,7 @@ export default function Layout({ children }: { children: ReactNode }) {
               <span className={styles.navIcon}>👤</span>
               <span>Mon profil</span>
             </Link>
-            <button className={`${styles.navItem} ${styles.logoutBtn}`} onClick={handleLogout}>
+            <button className={`${styles.navItem} ${styles.logoutBtn}`} onClick={() => setShowLogoutConfirm(true)}>
               <span className={styles.navIcon}>🚪</span>
               <span>Déconnexion</span>
             </button>
@@ -107,6 +112,17 @@ export default function Layout({ children }: { children: ReactNode }) {
         {/* MAIN */}
         <main className={styles.main}>{children}</main>
       </div>
+
+      <ConfirmDialog
+        open={showLogoutConfirm}
+        title="Se déconnecter ?"
+        message="Vous allez quitter votre session. Vous devrez vous reconnecter pour accéder à nouveau à EduStream."
+        confirmLabel="Se déconnecter"
+        danger
+        loading={loggingOut}
+        onConfirm={handleLogout}
+        onCancel={() => !loggingOut && setShowLogoutConfirm(false)}
+      />
     </div>
   );
 }

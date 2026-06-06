@@ -1,32 +1,19 @@
-import { useEffect, useRef, useState } from 'react';
+import { useCallback, useEffect, useRef, useState } from 'react';
 import api from '../../api/axios';
-
-interface Video {
-  id: number;
-  titre: string;
-  duree?: number;
-  url_publique?: string;
-  url_stockage: string;
-  statut: string;
-}
-
-interface Chapitre {
-  id: number;
-  titre: string;
-  ordre: number;
-  videos: Video[];
-}
-
-interface Module {
-  id: number;
-  titre: string;
-  description?: string;
-  chapitres?: Chapitre[];
-}
+import VideoPlayer from '../../components/VideoPlayer';
+import type { Video } from '../../types/video';
+import { isYoutubeVideo } from '../../types/video';
+import type { Chapitre, StudentModule } from '../../types/studentModule';
 
 interface Props {
-  module: Module;
+  module: StudentModule;
   onClose: () => void;
+  onProgressUpdate?: () => void;
+}
+
+interface VisionnageState {
+  position: number;
+  termine: boolean;
 }
 
 function fmt(s?: number) {
@@ -36,85 +23,209 @@ function fmt(s?: number) {
   return `${m}:${String(sec).padStart(2, '0')}`;
 }
 
-export default function CoursePlayer({ module, onClose }: Props) {
+function videoFraction(video: Video, v?: VisionnageState): number {
+  if (!v) return 0;
+  if (v.termine) return 1;
+  if (video.duree && video.duree > 0 && v.position > 0) {
+    return Math.min(v.position / video.duree, 0.99);
+  }
+  return 0;
+}
+
+export default function CoursePlayer({ module, onClose, onProgressUpdate }: Props) {
   const [chapitres, setChapitres] = useState<Chapitre[]>(module.chapitres || []);
   const [currentVideo, setCurrentVideo] = useState<Video | null>(null);
   const [currentChap, setCurrentChap] = useState<Chapitre | null>(null);
-  const [watched, setWatched] = useState<Set<number>>(new Set());
+  const [visionnages, setVisionnages] = useState<Map<number, VisionnageState>>(new Map());
   const [expandedChap, setExpandedChap] = useState<number | null>(null);
-  const videoRef = useRef<HTMLVideoElement>(null);
-  const progressTimer = useRef<ReturnType<typeof setInterval> | null>(null);
+  const [loading, setLoading] = useState(true);
+  const [startAt, setStartAt] = useState(0);
 
-  // Charger les chapitres si pas encore chargés
-  useEffect(() => {
-    if (!chapitres.length) {
-      api.get(`/modules/${module.id}/chapitres`)
-        .then(res => {
-          const chaps: Chapitre[] = res.data.data || res.data;
-          setChapitres(chaps);
-          // Ouvrir le premier chapitre
-          if (chaps.length > 0) {
-            setExpandedChap(chaps[0].id);
-            if (chaps[0].videos?.length > 0) {
-              selectVideo(chaps[0].videos[0], chaps[0]);
-            }
-          }
-        })
-        .catch(() => {});
-    } else {
-      if (chapitres.length > 0) {
-        setExpandedChap(chapitres[0].id);
-        if (chapitres[0].videos?.length > 0) {
-          selectVideo(chapitres[0].videos[0], chapitres[0]);
-        }
-      }
-    }
+  const visionnagesRef = useRef<Map<number, VisionnageState>>(new Map());
+  const currentVideoRef = useRef<Video | null>(null);
+  const lastSavedRef = useRef<{ videoId: number; position: number; termine: boolean } | null>(null);
+  const onProgressUpdateRef = useRef(onProgressUpdate);
+  onProgressUpdateRef.current = onProgressUpdate;
+
+  const syncVisionnages = useCallback((map: Map<number, VisionnageState>) => {
+    visionnagesRef.current = map;
+    setVisionnages(new Map(map));
   }, []);
 
-  const selectVideo = (video: Video, chap: Chapitre) => {
-    setCurrentVideo(video);
-    setCurrentChap(chap);
-    if (progressTimer.current) clearInterval(progressTimer.current);
-  };
+  const allVideos = chapitres.flatMap(c => (c.videos || []).map(v => ({ video: v, chap: c })));
 
-  // Enregistrer la progression toutes les 10 secondes
+  const watchedIds = new Set(
+    [...visionnages.entries()].filter(([, v]) => v.termine).map(([id]) => id)
+  );
+
+  const computeProgression = useCallback(() => {
+    const videos = chapitres.flatMap(c => c.videos || []);
+    if (videos.length === 0) return 0;
+    const total = videos.reduce((sum, v) => sum + videoFraction(v, visionnagesRef.current.get(v.id)), 0);
+    return Math.round((total / videos.length) * 100);
+  }, [chapitres]);
+
+  const persistProgress = useCallback(async (
+    video: Video,
+    position: number,
+    termine: boolean,
+    notify = true,
+  ) => {
+    const existing = visionnagesRef.current.get(video.id);
+    const finalTermine = existing?.termine || termine;
+    const finalPosition = Math.max(position, existing?.position || 0);
+
+    const last = lastSavedRef.current;
+    if (
+      last?.videoId === video.id &&
+      last.position === finalPosition &&
+      last.termine === finalTermine
+    ) {
+      return;
+    }
+
+    try {
+      const res = await api.post(`/videos/${video.id}/visionnage`, {
+        position: finalPosition,
+        termine: finalTermine,
+      });
+      const saved: VisionnageState = {
+        position: res.data.position ?? finalPosition,
+        termine: res.data.termine ?? finalTermine,
+      };
+      const next = new Map(visionnagesRef.current);
+      next.set(video.id, saved);
+      syncVisionnages(next);
+      lastSavedRef.current = { videoId: video.id, position: saved.position, termine: saved.termine };
+      if (notify) onProgressUpdateRef.current?.();
+    } catch { /* ignore */ }
+  }, [syncVisionnages]);
+
+  const flushCurrentVideo = useCallback(async () => {
+    const video = currentVideoRef.current;
+    if (!video) return;
+    const existing = visionnagesRef.current.get(video.id);
+    if (existing) {
+      await persistProgress(video, existing.position, existing.termine, false);
+    }
+  }, [persistProgress]);
+
   useEffect(() => {
-    if (!currentVideo || !videoRef.current) return;
-
-    const saveProgress = () => {
-      const v = videoRef.current;
-      if (!v) return;
-      const position = Math.floor(v.currentTime);
-      const termine = v.ended || (v.duration > 0 && v.currentTime / v.duration > 0.9);
-      api.post(`/videos/${currentVideo.id}/visionnage`, { position, termine }).catch(() => {});
-      if (termine) setWatched(prev => new Set([...prev, currentVideo.id]));
-    };
-
-    progressTimer.current = setInterval(saveProgress, 10000);
-    return () => { if (progressTimer.current) clearInterval(progressTimer.current); };
+    currentVideoRef.current = currentVideo;
   }, [currentVideo]);
 
-  const handleVideoEnd = () => {
-    if (!currentVideo) return;
-    api.post(`/videos/${currentVideo.id}/visionnage`, { position: 0, termine: true }).catch(() => {});
-    setWatched(prev => new Set([...prev, currentVideo.id]));
+  useEffect(() => {
+    const init = async () => {
+      setLoading(true);
+      try {
+        let chaps: Chapitre[] = module.chapitres?.length ? module.chapitres : [];
+        if (!chaps.length) {
+          const res = await api.get(`/modules/${module.id}/chapitres`);
+          chaps = res.data.data || res.data;
+          setChapitres(chaps);
+        }
 
-    // Passer à la vidéo suivante automatiquement
-    const allVideos = chapitres.flatMap(c => c.videos.map(v => ({ video: v, chap: c })));
-    const idx = allVideos.findIndex(x => x.video.id === currentVideo.id);
-    if (idx < allVideos.length - 1) {
-      const next = allVideos[idx + 1];
-      selectVideo(next.video, next.chap);
-      setExpandedChap(next.chap.id);
+        const vMap = new Map<number, VisionnageState>();
+        const videos = chaps.flatMap(c => c.videos || []);
+
+        await Promise.all(
+          videos.map(async (v) => {
+            try {
+              const res = await api.get(`/videos/${v.id}/visionnage`);
+              vMap.set(v.id, {
+                position: res.data.position || 0,
+                termine: !!res.data.termine,
+              });
+            } catch { /* ignore */ }
+          })
+        );
+        syncVisionnages(vMap);
+
+        if (chaps.length > 0 && videos.length > 0) {
+          setExpandedChap(chaps[0].id);
+          const firstUnwatched = videos.find(v => !vMap.get(v.id)?.termine);
+          const startVideo = firstUnwatched || videos[0];
+          const chap = chaps.find(c => c.videos?.some(v => v.id === startVideo.id));
+          if (chap) {
+            const saved = vMap.get(startVideo.id);
+            setStartAt(saved?.termine ? 0 : (saved?.position || 0));
+            setCurrentVideo(startVideo);
+            setCurrentChap(chap);
+          }
+        }
+      } finally {
+        setLoading(false);
+      }
+    };
+    init();
+  }, [module.id, syncVisionnages]);
+
+  const selectVideo = async (video: Video, chap: Chapitre) => {
+    if (currentVideoRef.current && currentVideoRef.current.id !== video.id) {
+      await flushCurrentVideo();
     }
+    const saved = visionnagesRef.current.get(video.id);
+    setStartAt(saved?.termine ? 0 : (saved?.position || 0));
+    setCurrentVideo(video);
+    setCurrentChap(chap);
+    lastSavedRef.current = null;
   };
 
-  const totalVideos = chapitres.reduce((s, c) => s + c.videos.length, 0);
-  const progression = totalVideos > 0 ? Math.round((watched.size / totalVideos) * 100) : 0;
+  const handleTimeUpdate = useCallback((currentTime: number, duration: number) => {
+    const video = currentVideoRef.current;
+    if (!video) return;
+
+    const position = Math.floor(currentTime);
+    const existing = visionnagesRef.current.get(video.id);
+    const termine = existing?.termine || (duration > 0 && currentTime / duration >= 0.9);
+    const finalPosition = Math.max(position, existing?.position || 0);
+
+    const next = new Map(visionnagesRef.current);
+    next.set(video.id, {
+      position: finalPosition,
+      termine: existing?.termine || termine,
+    });
+    visionnagesRef.current = next;
+
+    persistProgress(video, finalPosition, termine);
+  }, [persistProgress]);
+
+  const handleVideoEnd = useCallback(async () => {
+    const video = currentVideoRef.current;
+    if (!video) return;
+    await persistProgress(video, video.duree || 0, true);
+
+    const idx = allVideos.findIndex(x => x.video.id === video.id);
+    if (idx < allVideos.length - 1) {
+      const next = allVideos[idx + 1];
+      const saved = visionnagesRef.current.get(next.video.id);
+      setStartAt(saved?.termine ? 0 : (saved?.position || 0));
+      setCurrentVideo(next.video);
+      setCurrentChap(next.chap);
+      setExpandedChap(next.chap.id);
+      lastSavedRef.current = null;
+    }
+  }, [allVideos, persistProgress]);
+
+  const handleClose = async () => {
+    await flushCurrentVideo();
+    onProgressUpdateRef.current?.();
+    onClose();
+  };
+
+  const progression = computeProgression();
+  const completedCount = watchedIds.size;
+
+  if (loading) {
+    return (
+      <div style={{ padding: 60, textAlign: 'center', color: '#64748b' }}>
+        Chargement du cours...
+      </div>
+    );
+  }
 
   return (
     <div style={{ display: 'flex', flexDirection: 'column', height: '100%', background: '#0f172a', borderRadius: 14, overflow: 'hidden' }}>
-      {/* Header */}
       <div style={{
         display: 'flex', alignItems: 'center', justifyContent: 'space-between',
         padding: '14px 20px', background: '#1e293b', borderBottom: '1px solid #334155',
@@ -122,11 +233,12 @@ export default function CoursePlayer({ module, onClose }: Props) {
         <div>
           <div style={{ fontSize: 16, fontWeight: 700, color: '#f1f5f9' }}>{module.titre}</div>
           <div style={{ fontSize: 12, color: '#94a3b8', marginTop: 2 }}>
-            {watched.size}/{totalVideos} vidéos · {progression}% complété
+            {completedCount}/{allVideos.length} vidéos terminées · {progression}% avancement
           </div>
         </div>
         <button
-          onClick={onClose}
+          type="button"
+          onClick={handleClose}
           style={{
             background: '#334155', border: 'none', color: '#94a3b8',
             padding: '8px 16px', borderRadius: 8, cursor: 'pointer',
@@ -137,29 +249,29 @@ export default function CoursePlayer({ module, onClose }: Props) {
         </button>
       </div>
 
-      {/* Barre de progression globale */}
       <div style={{ height: 4, background: '#334155' }}>
         <div style={{ height: '100%', background: '#22c55e', width: `${progression}%`, transition: 'width .5s' }} />
       </div>
 
-      <div style={{ display: 'flex', flex: 1, overflow: 'hidden' }}>
-        {/* ── Lecteur vidéo ── */}
+      <div style={{ display: 'flex', flex: 1, overflow: 'hidden', minHeight: 400 }}>
         <div style={{ flex: 1, display: 'flex', flexDirection: 'column', background: '#000' }}>
           {currentVideo ? (
             <>
-              <video
-                ref={videoRef}
-                key={currentVideo.id}
-                src={currentVideo.url_publique || `http://localhost:8000/storage/${currentVideo.url_stockage}`}
-                controls
-                autoPlay
-                onEnded={handleVideoEnd}
-                style={{ width: '100%', flex: 1, background: '#000', maxHeight: 'calc(100vh - 280px)' }}
-              />
+              <div style={{ flex: 1, display: 'flex', alignItems: 'center', maxHeight: 'calc(100vh - 280px)' }}>
+                <VideoPlayer
+                  video={currentVideo}
+                  autoPlay
+                  startAt={startAt}
+                  onEnded={handleVideoEnd}
+                  onTimeUpdate={handleTimeUpdate}
+                />
+              </div>
               <div style={{ padding: '14px 20px', background: '#1e293b' }}>
                 <div style={{ fontSize: 15, fontWeight: 600, color: '#f1f5f9' }}>{currentVideo.titre}</div>
                 <div style={{ fontSize: 12, color: '#64748b', marginTop: 4 }}>
                   {currentChap?.titre} · {fmt(currentVideo.duree)}
+                  {visionnages.get(currentVideo.id)?.termine && ' · ✅ Terminée'}
+                  {isYoutubeVideo(currentVideo) && ' · YouTube'}
                 </div>
               </div>
             </>
@@ -169,12 +281,11 @@ export default function CoursePlayer({ module, onClose }: Props) {
               alignItems: 'center', justifyContent: 'center', color: '#475569',
             }}>
               <span style={{ fontSize: 48, marginBottom: 12 }}>▶</span>
-              <p>Sélectionnez une vidéo pour commencer</p>
+              <p>Aucune vidéo disponible dans ce cours</p>
             </div>
           )}
         </div>
 
-        {/* ── Sidebar chapitres ── */}
         <div style={{
           width: 300, background: '#1e293b', borderLeft: '1px solid #334155',
           overflowY: 'auto', flexShrink: 0,
@@ -190,8 +301,8 @@ export default function CoursePlayer({ module, onClose }: Props) {
           ) : (
             chapitres.map(chap => (
               <div key={chap.id}>
-                {/* En-tête chapitre */}
                 <button
+                  type="button"
                   onClick={() => setExpandedChap(expandedChap === chap.id ? null : chap.id)}
                   style={{
                     width: '100%', padding: '12px 16px',
@@ -206,18 +317,20 @@ export default function CoursePlayer({ module, onClose }: Props) {
                   </span>
                   <span style={{ fontSize: 13, fontWeight: 600, color: '#e2e8f0', flex: 1 }}>{chap.titre}</span>
                   <span style={{ fontSize: 11, color: '#475569', flexShrink: 0 }}>
-                    {chap.videos?.filter(v => watched.has(v.id)).length || 0}/{chap.videos?.length || 0}
+                    {chap.videos?.filter(v => visionnages.get(v.id)?.termine).length || 0}/{chap.videos?.length || 0}
                   </span>
                   <span style={{ color: '#475569', fontSize: 10 }}>{expandedChap === chap.id ? '▲' : '▼'}</span>
                 </button>
 
-                {/* Vidéos du chapitre */}
                 {expandedChap === chap.id && (chap.videos || []).map(vid => {
                   const isActive = currentVideo?.id === vid.id;
-                  const isDone = watched.has(vid.id);
+                  const saved = visionnages.get(vid.id);
+                  const isDone = saved?.termine;
+                  const partial = !isDone && saved && saved.position > 0;
                   return (
                     <button
                       key={vid.id}
+                      type="button"
                       onClick={() => selectVideo(vid, chap)}
                       style={{
                         width: '100%', padding: '10px 16px 10px 32px',
@@ -229,7 +342,7 @@ export default function CoursePlayer({ module, onClose }: Props) {
                       }}
                     >
                       <span style={{ fontSize: 14, flexShrink: 0 }}>
-                        {isDone ? '✅' : isActive ? '▶' : '🎬'}
+                        {isDone ? '✅' : partial ? '⏳' : isActive ? '▶' : isYoutubeVideo(vid) ? '📺' : '🎬'}
                       </span>
                       <span style={{
                         fontSize: 13, color: isActive ? '#f1f5f9' : '#94a3b8',

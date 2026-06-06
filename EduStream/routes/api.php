@@ -14,8 +14,10 @@ use App\Http\Controllers\Api\VisionnageController;
 | Routes publiques (sans authentification)
 |--------------------------------------------------------------------------
 */
-Route::post('/register', [AuthController::class, 'register']);
-Route::post('/login',    [AuthController::class, 'login']);
+Route::post('/register',         [AuthController::class, 'register']);
+Route::post('/login',            [AuthController::class, 'login']);
+Route::post('/forgot-password',  [AuthController::class, 'forgotPassword']);
+Route::post('/reset-password',   [AuthController::class, 'resetPassword']);
 
 /*
 |--------------------------------------------------------------------------
@@ -54,6 +56,7 @@ Route::middleware('auth:sanctum')->group(function () {
     */
     Route::get('/modules',          [ModuleController::class, 'index']);
     Route::get('/modules/{module}', [ModuleController::class, 'show']);
+    Route::get('/modules/{module}/chapitres', [ChapitreController::class, 'index']);
 
     // Création et modification : enseignant ou admin
     Route::middleware('role:enseignant,admin')->group(function () {
@@ -64,7 +67,6 @@ Route::middleware('auth:sanctum')->group(function () {
         Route::patch('/modules/{module}/publier',    [ModuleController::class, 'publier']);
 
         // Chapitres
-        Route::get('/modules/{module}/chapitres',                          [ChapitreController::class, 'index']);
         Route::post('/modules/{module}/chapitres',                         [ChapitreController::class, 'store']);
         Route::put('/modules/{module}/chapitres/{chapitre}',               [ChapitreController::class, 'update']);
         Route::delete('/modules/{module}/chapitres/{chapitre}',            [ChapitreController::class, 'destroy']);

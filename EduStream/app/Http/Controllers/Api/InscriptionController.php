@@ -4,6 +4,7 @@ namespace App\Http\Controllers\Api;
 
 use App\Http\Controllers\Controller;
 use App\Models\Module;
+use App\Support\ProgressionHelper;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
 
@@ -23,27 +24,15 @@ class InscriptionController extends Controller
             ->with(['chapitres.videos'])
             ->get();
 
-        // Calculer la progression pour chaque module
         $modules->transform(function ($module) use ($user) {
             $totalVideos = $module->videos_count;
+            $videos = $module->chapitres->flatMap(fn($c) => $c->videos);
+            $stats = ProgressionHelper::forModule($user, $videos, $totalVideos);
 
-            $videosVues = 0;
-            if ($totalVideos > 0) {
-                // IDs des vidéos du module
-                $videoIds = $module->chapitres->flatMap(fn($c) => $c->videos->pluck('id'));
-
-                $videosVues = $user->visionnages()
-                    ->whereIn('video_id', $videoIds)
-                    ->where('termine', true)
-                    ->count();
-            }
-
-            $module->nb_chapitres  = $module->chapitres_count;
-            $module->nb_videos     = $totalVideos;
-            $module->videos_vues   = $videosVues;
-            $module->progression   = $totalVideos > 0
-                ? (int) round(($videosVues / $totalVideos) * 100)
-                : 0;
+            $module->nb_chapitres = $module->chapitres_count;
+            $module->nb_videos    = $totalVideos;
+            $module->videos_vues  = $stats['videos_vues'];
+            $module->progression  = $stats['progression'];
 
             return $module;
         });

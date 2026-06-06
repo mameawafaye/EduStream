@@ -12,14 +12,26 @@ class VisionnageController extends Controller
 {
     /**
      * Enregistre ou met à jour la progression d'un étudiant sur une vidéo.
-     * Crée le visionnage s'il n'existe pas encore (upsert).
+     * - termine : une fois true, ne repasse jamais à false
+     * - position : conserve toujours la valeur maximale atteinte
      */
     public function upsert(Request $request, Video $video): JsonResponse
     {
+        if ($denied = $this->ensureEtudiantInscrit($request, $video)) {
+            return $denied;
+        }
+
         $request->validate([
             'position' => 'required|integer|min:0',
             'termine'  => 'required|boolean',
         ]);
+
+        $existing = Visionnage::where('user_id', $request->user()->id)
+            ->where('video_id', $video->id)
+            ->first();
+
+        $position = max($request->integer('position'), $existing?->position ?? 0);
+        $termine  = ($existing?->termine ?? false) || $request->boolean('termine');
 
         $visionnage = Visionnage::updateOrCreate(
             [
@@ -27,8 +39,8 @@ class VisionnageController extends Controller
                 'video_id' => $video->id,
             ],
             [
-                'position' => $request->position,
-                'termine'  => $request->termine,
+                'position' => $position,
+                'termine'  => $termine,
             ]
         );
 
@@ -40,6 +52,10 @@ class VisionnageController extends Controller
      */
     public function show(Request $request, Video $video): JsonResponse
     {
+        if ($denied = $this->ensureEtudiantInscrit($request, $video)) {
+            return $denied;
+        }
+
         $visionnage = Visionnage::where('user_id', $request->user()->id)
             ->where('video_id', $video->id)
             ->first();
@@ -62,5 +78,26 @@ class VisionnageController extends Controller
             'total_visionnages' => $totalVisionnages,
             'termines'          => $termines,
         ]);
+    }
+
+    /** Vérifie que l'étudiant est inscrit au module contenant la vidéo */
+    private function ensureEtudiantInscrit(Request $request, Video $video): ?JsonResponse
+    {
+        $video->loadMissing('chapitre.module');
+        $module = $video->chapitre?->module;
+
+        if (! $module) {
+            return response()->json(['message' => 'Vidéo introuvable.'], 404);
+        }
+
+        if ($module->statut !== 'publie') {
+            return response()->json(['message' => 'Ce module n\'est pas disponible.'], 403);
+        }
+
+        if (! $request->user()->modulesInscrits()->where('module_id', $module->id)->exists()) {
+            return response()->json(['message' => 'Vous devez être inscrit à ce module.'], 403);
+        }
+
+        return null;
     }
 }

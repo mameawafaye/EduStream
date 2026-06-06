@@ -20,8 +20,18 @@ export default function Login() {
       const res = await api.post('/login', { email, password });
       login(res.data.user, res.data.token);
       navigate('/dashboard');
-    } catch {
-      setError('Email ou mot de passe incorrect.');
+    } catch (err: unknown) {
+      const axiosErr = err as { response?: { status?: number; data?: { message?: string; errors?: Record<string, string[]> } }; code?: string };
+      if (!axiosErr.response) {
+        setError('Impossible de joindre le serveur. Vérifiez que le backend tourne (php artisan serve).');
+      } else if (axiosErr.response.status === 422) {
+        const msg = axiosErr.response.data?.errors?.email?.[0]
+          || axiosErr.response.data?.message
+          || 'Email ou mot de passe incorrect.';
+        setError(msg);
+      } else {
+        setError('Erreur de connexion. Réessayez.');
+      }
     } finally {
       setLoading(false);
     }
