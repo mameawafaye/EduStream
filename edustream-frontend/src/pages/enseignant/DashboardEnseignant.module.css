@@ -1,0 +1,107 @@
+.page { max-width: 1100px; }
+.header { display: flex; align-items: center; justify-content: space-between; margin-bottom: 24px; }
+.title { font-size: 22px; font-weight: 700; color: var(--gray-900); }
+.subtitle { font-size: 14px; color: var(--gray-500); margin-top: 3px; }
+
+.newBtn {
+  padding: 10px 18px;
+  background: var(--green);
+  color: #fff;
+  border: none;
+  border-radius: 10px;
+  font-size: 14px;
+  font-weight: 600;
+  cursor: pointer;
+  transition: background .15s;
+}
+.newBtn:hover { background: var(--green-dark); }
+
+.stats { display: grid; grid-template-columns: repeat(4,1fr); gap: 14px; margin-bottom: 24px; }
+.statCard { background: #fff; border-radius: var(--radius); padding: 18px 20px; box-shadow: var(--shadow-sm); border: 1px solid var(--gray-100); }
+.statIcon { width: 40px; height: 40px; border-radius: 10px; display: flex; align-items: center; justify-content: center; font-size: 18px; margin-bottom: 12px; }
+.green { background: var(--green-light); }
+.blue { background: #EFF6FF; }
+.orange { background: #FFF7ED; }
+.purple { background: #F5F3FF; }
+.statNum { font-size: 24px; font-weight: 700; color: var(--gray-900); }
+.statLabel { font-size: 12px; color: var(--gray-500); margin-top: 3px; }
+
+/* ENREGISTREMENT */
+.recCard {
+  background: #fff;
+  border-radius: var(--radius);
+  border: 1px solid var(--gray-100);
+  box-shadow: var(--shadow-sm);
+  padding: 24px 28px;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  margin-bottom: 32px;
+  gap: 24px;
+}
+.recLeft { flex: 1; }
+.recTitle { font-size: 17px; font-weight: 700; color: var(--gray-800); margin-bottom: 6px; }
+.recSub { font-size: 13px; color: var(--gray-500); margin-bottom: 14px; line-height: 1.6; }
+.recSources { display: flex; gap: 8px; }
+.srcBtn { padding: 8px 14px; border: 1.5px solid var(--gray-200); background: #fff; border-radius: 8px; font-size: 13px; color: var(--gray-600); cursor: pointer; transition: all .15s; }
+.srcBtn:hover { border-color: var(--green); color: var(--green-dark); background: var(--green-light); }
+
+.recRight { display: flex; flex-direction: column; align-items: center; gap: 8px; }
+.recBtn {
+  width: 72px; height: 72px;
+  border-radius: 50%;
+  border: 3px solid #EF4444;
+  background: #FEF2F2;
+  font-size: 28px;
+  cursor: pointer;
+  transition: all .2s;
+  display: flex; align-items: center; justify-content: center;
+}
+.recBtn:hover { transform: scale(1.05); }
+.recOn { background: #EF4444; border-color: #EF4444; }
+
+.recTimer { font-size: 26px; font-weight: 700; color: var(--gray-800); font-variant-numeric: tabular-nums; }
+.recStatus { font-size: 12px; color: var(--gray-400); text-align: center; max-width: 160px; }
+
+/* SECTION */
+.sectionHeader { display: flex; align-items: center; justify-content: space-between; margin-bottom: 14px; }
+.sectionTitle { font-size: 17px; font-weight: 700; color: var(--gray-800); }
+
+/* MODULE LIST */
+.moduleList { display: flex; flex-direction: column; gap: 12px; }
+
+.modRow {
+  background: #fff;
+  border-radius: var(--radius);
+  border: 1px solid var(--gray-100);
+  box-shadow: var(--shadow-sm);
+  padding: 16px;
+  display: flex;
+  align-items: flex-start;
+  gap: 16px;
+  transition: all .15s;
+}
+.modRow:hover { border-color: var(--green-mid); box-shadow: var(--shadow-md); }
+
+.modImg { width: 90px; height: 64px; border-radius: 9px; object-fit: cover; flex-shrink: 0; }
+
+.modInfo { flex: 1; }
+.modTitle { font-size: 15px; font-weight: 600; color: var(--gray-800); margin-bottom: 4px; }
+.modMeta { font-size: 12px; color: var(--gray-400); margin-bottom: 10px; }
+
+.chapList { display: flex; flex-direction: column; gap: 4px; }
+.chapItem { font-size: 12px; color: var(--gray-500); display: flex; justify-content: space-between; padding: 3px 0; }
+.chapItem span { color: var(--gray-400); }
+.chapAdd { font-size: 12px; color: var(--green); cursor: pointer; font-weight: 500; padding: 3px 0; }
+.chapAdd:hover { text-decoration: underline; }
+
+.modActions { display: flex; flex-direction: column; align-items: flex-end; gap: 8px; flex-shrink: 0; }
+
+.pill { font-size: 11px; font-weight: 600; padding: 4px 10px; border-radius: 20px; }
+.pillGreen { background: var(--green-light); color: var(--green-dark); }
+.pillOrange { background: #FFF7ED; color: #C2410C; }
+
+.publishBtn { padding: 7px 14px; background: var(--green); color: #fff; border: none; border-radius: 8px; font-size: 12px; font-weight: 600; cursor: pointer; }
+.publishBtn:hover { background: var(--green-dark); }
+.editBtn, .statsBtn { padding: 7px 10px; background: var(--gray-100); border: none; border-radius: 8px; font-size: 14px; cursor: pointer; transition: background .15s; }
+.editBtn:hover, .statsBtn:hover { background: var(--gray-200); }
